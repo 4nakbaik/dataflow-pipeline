@@ -1,4 +1,4 @@
--- Tabel Raw: Menyimpan setiap transaksi masuk
+-- Tabel Raw: Menyimpan setiap transaksi yg masuk
 CREATE TABLE IF NOT EXISTS raw_sales (
     id SERIAL PRIMARY KEY,
     transaction_id VARCHAR(50),

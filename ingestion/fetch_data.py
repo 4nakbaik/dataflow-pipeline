@@ -6,10 +6,10 @@ import logging
 from typing import Dict, Any
 from sqlalchemy import create_engine, text
 
-# Configure basic logging
+# Logging config
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Database configuration
+# Database config
 DB_URL = os.getenv("DATABASE_URL")
 if not DB_URL:
     raise ValueError("DATABASE_URL environment variable is not set.")
@@ -18,7 +18,6 @@ engine = create_engine(DB_URL)
 CATEGORIES = ['Electronics', 'Clothing', 'Groceries', 'Books']
 
 def generate_transaction() -> Dict[str, Any]:
-    """Generates a single dummy transaction record."""
     return {
         "transaction_id": str(uuid.uuid4()),
         "product_category": random.choice(CATEGORIES),
@@ -26,12 +25,6 @@ def generate_transaction() -> Dict[str, Any]:
     }
 
 def run_ingestion(batch_size: int = 10) -> None:
-    """
-    Simulates data ingestion from an external source into the raw_sales table.
-    
-    Args:
-        batch_size: Number of records to generate per run.
-    """
     logging.info("Starting data ingestion process.")
     
     query = text("""
@@ -53,6 +46,5 @@ def run_ingestion(batch_size: int = 10) -> None:
         raise
 
 if __name__ == "__main__":
-    # Delay to ensure DB is ready during container startup
     time.sleep(2)
     run_ingestion()
