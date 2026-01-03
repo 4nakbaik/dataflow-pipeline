@@ -1,0 +1,22 @@
+# Py
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+venv/
+env/
+.pytest_cache/
+
+# Env
+.env
+
+# Database Data 
+postgres_data/
+
+# IDE 
+.vscode/
+.idea/
+.DS_Store
+
+# Logs
+*.log
