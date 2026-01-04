@@ -7,42 +7,52 @@ if not db_url:
 
 engine = create_engine(db_url)
 
-def create_tables():
-    print("--- Starting Manual Table Creation ---")
+def reset_and_create_tables():
+    print("--- Resetting Database for Crypto Pipeline ---")
     
-    create_raw_sales = """
-    CREATE TABLE IF NOT EXISTS raw_sales (
+    # Schema untuk Data raw
+    create_raw_crypto = """
+    CREATE TABLE IF NOT EXISTS raw_crypto_prices (
         id SERIAL PRIMARY KEY,
-        transaction_id VARCHAR(50),
-        product_category VARCHAR(50),
-        amount DECIMAL(10, 2),
+        coin_id VARCHAR(50),
+        price_usd DECIMAL(20, 8),
+        market_cap DECIMAL(20, 2),
+        volume_24h DECIMAL(20, 2),
         timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
     """
     
-    create_sales_summary = """
-    CREATE TABLE IF NOT EXISTS sales_summary (
-        category VARCHAR(50) PRIMARY KEY,
-        total_revenue DECIMAL(15, 2),
-        transaction_count INT,
+    # Schema untuk Analytics 
+    create_crypto_summary = """
+    CREATE TABLE IF NOT EXISTS crypto_summary (
+        coin_id VARCHAR(50) PRIMARY KEY,
+        avg_price_usd DECIMAL(20, 8),
+        max_price_usd DECIMAL(20, 8),
         last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     );
     """
 
+    drop_old_tables = """
+    DROP TABLE IF EXISTS raw_sales;
+    DROP TABLE IF EXISTS sales_summary;
+    DROP TABLE IF EXISTS raw_crypto_prices; 
+    DROP TABLE IF EXISTS crypto_summary;
+    """
+
     try:
         with engine.connect() as conn:
-            conn.execute(text(create_raw_sales))
-            print("Created table: raw_sales")
+            print("Dropping old tables...")
+            conn.execute(text(drop_old_tables))
             
-            conn.execute(text(create_sales_summary))
-            print("Created table: sales_summary")
-            
+            print("Creating crypto tables...")
+            conn.execute(text(create_raw_crypto))
+            conn.execute(text(create_crypto_summary))
             conn.commit()
             
-        print("--- SUCCESS: All tables created manually ---")
+        print("--- SUCCESS: Database ready for Crypto Data ---")
         
     except Exception as e:
         print(f"--- ERROR: {e} ---")
 
 if __name__ == "__main__":
-    create_tables()
+    reset_and_create_tables()

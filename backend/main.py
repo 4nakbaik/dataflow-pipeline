@@ -1,34 +1,52 @@
 from fastapi import FastAPI, HTTPException
 from sqlalchemy import create_engine, text
-from pydantic import BaseModel
-from typing import List, Optional
 import os
+import logging
 
-app = FastAPI(title="Data Pipeline API", version="1.0.0")
+# Logging config
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
+app = FastAPI(title="WowoManiac")
+
+# Koneksi DB
 DB_URL = os.getenv("DATABASE_URL")
+if not DB_URL:
+    DB_URL = "postgresql://user:password@localhost:5432/pipeline_db"
+
 engine = create_engine(DB_URL)
 
-class SalesSummary(BaseModel):
-    category: str
-    total_revenue: float
-    transaction_count: int
-    class Config:
-        from_attributes = True
+@app.get("/")
+def read_root():
+    return {"status": "Broker API Active"}
 
-@app.get("/health")
-def health_check():
-    return {"status": "ok"}
-
-@app.get("/api/summary", response_model=Dict[str, List[SalesSummary]])
-def get_sales_summary():
-
+@app.get("/api/summary")
+def get_summary():
     try:
         with engine.connect() as conn:
-            result = conn.execute(text("SELECT category, total_revenue, transaction_count FROM sales_summary"))
+            query = text("SELECT * FROM crypto_summary")
+            result = conn.execute(query)
+            data = [dict(row._mapping) for row in result]
+        return {"data": data}
+    except Exception as e:
+        logger.error(f"DB Error: {e}")
+        return {"data": [], "error": str(e)}
+
+@app.get("/api/history/{coin_id}")
+def get_coin_history(coin_id: str):
+    try:
+        with engine.connect() as conn:
+            query = text("""
+                SELECT timestamp, price_usd, volume_24h 
+                FROM raw_crypto_prices 
+                WHERE coin_id = :coin_id 
+                ORDER BY timestamp ASC
+                LIMIT 500
+            """)
+            result = conn.execute(query, {"coin_id": coin_id})
             data = [dict(row._mapping) for row in result]
             
         return {"data": data}
-        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+        logger.error(f"History Error: {e}")
+        return {"data": [], "error": str(e)}

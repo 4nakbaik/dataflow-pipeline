@@ -1,50 +1,56 @@
 import os
-import time
-import random
-import uuid
+import requests
 import logging
-from typing import Dict, Any
 from sqlalchemy import create_engine, text
 
-# Logging config
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-# Database config
 DB_URL = os.getenv("DATABASE_URL")
-if not DB_URL:
-    raise ValueError("DATABASE_URL environment variable is not set.")
-
 engine = create_engine(DB_URL)
-CATEGORIES = ['Electronics', 'Clothing', 'Groceries', 'Books']
 
-def generate_transaction() -> Dict[str, Any]:
-    return {
-        "transaction_id": str(uuid.uuid4()),
-        "product_category": random.choice(CATEGORIES),
-        "amount": round(random.uniform(10.0, 500.0), 2)
-    }
+# Koin yg ingin dipantau/fetch
+COINS = "bitcoin,ethereum,solana,ripple,cardano"
+URL = f"https://api.coingecko.com/api/v3/simple/price?ids={COINS}&vs_currencies=usd&include_market_cap=true&include_24hr_vol=true"
 
-def run_ingestion(batch_size: int = 10) -> None:
-    logging.info("Starting data ingestion process.")
+def fetch_crypto_prices():
+    logging.info("Calling CoinGecko API...")
+    try:
+        response = requests.get(URL, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        return data
+    except Exception as e:
+        logging.error(f"Failed to fetch data: {e}")
+        return None
+
+def run_ingestion():
+    logging.info("Starting Crypto Ingestion...")
     
+    data = fetch_crypto_prices()
+    if not data:
+        return
+
     query = text("""
-        INSERT INTO raw_sales (transaction_id, product_category, amount)
-        VALUES (:transaction_id, :product_category, :amount)
+        INSERT INTO raw_crypto_prices (coin_id, price_usd, market_cap, volume_24h)
+        VALUES (:coin_id, :price_usd, :market_cap, :volume_24h)
     """)
 
     try:
         with engine.connect() as conn:
-            for _ in range(batch_size):
-                data = generate_transaction()
-                conn.execute(query, data)
-            conn.commit()
+            for coin, stats in data.items():
+                record = {
+                    "coin_id": coin,
+                    "price_usd": stats.get('usd', 0),
+                    "market_cap": stats.get('usd_market_cap', 0),
+                    "volume_24h": stats.get('usd_24h_vol', 0)
+                }
+                conn.execute(query, record)
             
-        logging.info(f"Successfully ingested {batch_size} records into raw_sales.")
-        
+            conn.commit()
+            logging.info(f"Successfully ingested prices for {len(data)} coins.")
+            
     except Exception as e:
-        logging.error(f"Ingestion failed: {e}")
-        raise
+        logging.error(f"Database insertion failed: {e}")
 
 if __name__ == "__main__":
-    time.sleep(2)
     run_ingestion()

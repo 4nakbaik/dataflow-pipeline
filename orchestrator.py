@@ -1,10 +1,10 @@
 import time
 import logging
-import schedule 
+import schedule
 from ingestion.fetch_data import run_ingestion
 from etl.transform import run_etl_pipeline
 
-# Logging config
+# Configure Logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - [ORCHESTRATOR] - %(message)s',
@@ -12,31 +12,40 @@ logging.basicConfig(
 )
 
 def job():
-    logging.info("--- Memulai Siklus Baru ---")
+    """
+    Executes one full pipeline cycle: Ingestion -> ETL.
+    """
+    logging.info("--- Starting Pipeline Cycle ---")
     
+    # 1. Trigger Ingestion
     try:
-        logging.info("Jalanin Ingestion...")
-        run_ingestion(batch_size=5) # Kita kecilin batch biar kelihatan nambahnya pelan-pelan
+        logging.info("Running Ingestion...")
+        # FIX: Removed argument 'batch_size' as API ingestion doesn't need it
+        run_ingestion() 
     except Exception as e:
-        logging.error(f"Ingestion Gagal: {e}")
-        return 
+        logging.error(f"Ingestion Failed: {e}")
+        return
 
+    # 2. Trigger ETL
     try:
-        logging.info("Jalanin ETL...")
+        logging.info("Running ETL...")
         run_etl_pipeline()
     except Exception as e:
-        logging.error(f"ETL Gagal: {e}")
+        logging.error(f"ETL Failed: {e}")
 
-    logging.info("--- Siklus Selesai. Menunggu siklus berikutnya... ---")
+    logging.info("--- Cycle Completed. Waiting for next schedule... ---")
 
 def run_scheduler():
-    logging.info("Orchestrator Berjalan. Tekan Ctrl+C untuk berhenti.")
-    schedule.every(10).seconds.do(job)
+    logging.info("Orchestrator Started. Press Ctrl+C to stop.")
+    
+    # Set to 60 seconds to respect CoinGecko API Rate Limits (approx 10-30 req/min free tier)
+    schedule.every(60).seconds.do(job)
 
     while True:
         schedule.run_pending()
         time.sleep(1)
 
 if __name__ == "__main__":
+    # Run once immediately on startup
     job()
     run_scheduler()
