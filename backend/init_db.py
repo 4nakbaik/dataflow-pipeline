@@ -10,7 +10,7 @@ engine = create_engine(db_url)
 def reset_and_create_tables():
     print("--- Resetting Database for Crypto Pipeline ---")
     
-    # Schema untuk Data raw
+    #Skema untk Data raw
     create_raw_crypto = """
     CREATE TABLE IF NOT EXISTS raw_crypto_prices (
         id SERIAL PRIMARY KEY,
@@ -22,7 +22,7 @@ def reset_and_create_tables():
     );
     """
     
-    # Schema untuk Analytics 
+    #Skema untuk Analytics 
     create_crypto_summary = """
     CREATE TABLE IF NOT EXISTS crypto_summary (
         coin_id VARCHAR(50) PRIMARY KEY,

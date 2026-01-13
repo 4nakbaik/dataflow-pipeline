@@ -3,19 +3,10 @@ import logging
 import requests
 from typing import Optional
 
-# Konfigurasi Logging
 logger = logging.getLogger(__name__)
 
 def send_telegram_alert(message: str) -> bool:
-    """
-    Mengirim pesan teks ke Telegram menggunakan Bot API.
     
-    Args:
-        message (str): Isi pesan yang akan dikirim (mendukung Markdown).
-        
-    Returns:
-        bool: True jika berhasil, False jika gagal.
-    """
     token = os.getenv("TELEGRAM_BOT_TOKEN")
     chat_id = os.getenv("TELEGRAM_CHAT_ID")
 

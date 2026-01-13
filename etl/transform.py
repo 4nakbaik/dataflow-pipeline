@@ -1,10 +1,13 @@
 import os
+import sys
 import logging
 import pandas as pd
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 
-# Logging config
+sys.path.append(os.getcwd())
+from backend.notifier import send_telegram_alert
+
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 DB_URL = os.getenv("DATABASE_URL")
@@ -15,8 +18,42 @@ def extract_data(db_engine: Engine) -> pd.DataFrame:
     try:
         return pd.read_sql(query, db_engine)
     except Exception as e:
-        logging.error(f"Error extracting data (Table might be missing): {e}")
+        logging.error(f"Error extracting data: {e}")
         return pd.DataFrame()
+
+def calculate_rsi(series: pd.Series, period: int = 14) -> pd.Series:
+    delta = series.diff()
+    gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
+    loss = (-delta.where(delta < 0, 0)).rolling(window=period).mean()
+    rs = gain / loss
+    return 100 - (100 / (1 + rs))
+
+def process_alerts(df: pd.DataFrame):
+    if df.empty: return
+
+    unique_coins = df['coin_id'].unique()
+
+    for coin in unique_coins:
+        coin_df = df[df['coin_id'] == coin].sort_values('timestamp')
+        
+        if len(coin_df) < 15: continue
+
+        coin_df['RSI'] = calculate_rsi(coin_df['price_usd'])
+        
+        last_row = coin_df.iloc[-1]
+        rsi = last_row['RSI']
+        price = last_row['price_usd']
+        
+        msg = ""
+        #Logika Sinyal <30 Oversold, >70 Overbought
+        if rsi < 30:
+            msg = f"BUY SIGNAL: {coin.upper()}\nPrice: ${price:,.2f}\nRSI: {rsi:.2f} (Oversold)"
+        elif rsi > 70:
+            msg = f"SELL SIGNAL: {coin.upper()}\nPrice: ${price:,.2f}\nRSI: {rsi:.2f} (Overbought)"
+            
+        if msg:
+            logging.info(f"Triggering alert for {coin}")
+            send_telegram_alert(msg)
 
 def transform_data(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty:
@@ -54,9 +91,15 @@ def run_etl_pipeline():
     raw_df = extract_data(engine)
     logging.info(f"Extracted {len(raw_df)} records.")
     
-    clean_df = transform_data(raw_df)
+    if not raw_df.empty:
+        try:
+            process_alerts(raw_df)
+        except Exception as e:
+            logging.error(f"Alert processing failed: {e}")
+
+        clean_df = transform_data(raw_df)
+        load_data(clean_df, engine)
     
-    load_data(clean_df, engine)
     logging.info("ETL pipeline completed successfully.")
 
 if __name__ == "__main__":

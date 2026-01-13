@@ -6,4 +6,5 @@ uvicorn
 streamlit
 requests
 plotly
-schedules
+schedule
+scikit-learn

@@ -9,7 +9,6 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="WowoManiac")
 
-# Koneksi DB
 DB_URL = os.getenv("DATABASE_URL")
 if not DB_URL:
     DB_URL = "postgresql://user:password@localhost:5432/pipeline_db"
