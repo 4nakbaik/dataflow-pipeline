@@ -1,0 +1,14 @@
+# Memantau data ingestion dari API ke Kafka
+podman logs -f pipeline_producer
+
+# Memantau penyimpanan data dari Kafka ke PostgreSQL
+podman logs -f pipeline_consumer
+
+# Memantau request dari Frontend ke API Backend
+podman logs -f pipeline_backend
+
+# Masuk ke DB
+podman exec -it crypto_db psql -U kangmus -d plprjk1_db
+
+# Restart Tele
+podman compose reestart consumer

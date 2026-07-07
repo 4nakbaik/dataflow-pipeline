@@ -6,7 +6,10 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 
 sys.path.append(os.getcwd())
-from backend.notifier import send_telegram_alert
+try:
+    from backend.notifier import send_telegram_alert
+except ImportError:
+    def send_telegram_alert(msg): logging.warning("Telegram notifier not found.")
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -14,9 +17,11 @@ DB_URL = os.getenv("DATABASE_URL")
 engine = create_engine(DB_URL)
 
 def extract_data(db_engine: Engine) -> pd.DataFrame:
-    query = "SELECT coin_id, price_usd, timestamp FROM raw_crypto_prices"
+    query = "SELECT coin_id, price_usd, fetched_at FROM raw_crypto_prices"
     try:
-        return pd.read_sql(query, db_engine)
+        df = pd.read_sql(query, db_engine)
+        df.rename(columns={'fetched_at': 'timestamp'}, inplace=True)
+        return df
     except Exception as e:
         logging.error(f"Error extracting data: {e}")
         return pd.DataFrame()
@@ -45,7 +50,6 @@ def process_alerts(df: pd.DataFrame):
         price = last_row['price_usd']
         
         msg = ""
-        #Logika Sinyal <30 Oversold, >70 Overbought
         if rsi < 30:
             msg = f"BUY SIGNAL: {coin.upper()}\nPrice: ${price:,.2f}\nRSI: {rsi:.2f} (Oversold)"
         elif rsi > 70:
@@ -53,15 +57,18 @@ def process_alerts(df: pd.DataFrame):
             
         if msg:
             logging.info(f"Triggering alert for {coin}")
-            send_telegram_alert(msg)
+            try:
+                send_telegram_alert(msg)
+            except Exception as e:
+                logging.error(f"Failed to send alert: {e}")
 
 def transform_data(df: pd.DataFrame) -> pd.DataFrame:
-    if df.empty:
-        return pd.DataFrame()
+    if df.empty: return pd.DataFrame()
 
     summary = df.groupby('coin_id').agg(
-        avg_price_usd=('price_usd', 'mean'),
-        max_price_usd=('price_usd', 'max'),
+        avg_price=('price_usd', 'mean'),
+        max_price=('price_usd', 'max'),
+        min_price=('price_usd', 'min'),
         last_updated=('timestamp', 'max')
     ).reset_index()
 
@@ -73,11 +80,9 @@ def load_data(df: pd.DataFrame, db_engine: Engine, table_name: str = 'crypto_sum
         return
 
     try:
-        df.to_sql(table_name, db_engine, if_exists='replace', index=False)
-
-        with db_engine.connect() as conn:
+        with db_engine.begin() as conn:
+            df.to_sql(table_name, conn, if_exists='replace', index=False)
             conn.execute(text(f"ALTER TABLE {table_name} ADD PRIMARY KEY (coin_id);"))
-            conn.commit()
             
         logging.info(f"Successfully loaded {len(df)} rows into {table_name}.")
         
@@ -91,14 +96,17 @@ def run_etl_pipeline():
     raw_df = extract_data(engine)
     logging.info(f"Extracted {len(raw_df)} records.")
     
-    if not raw_df.empty:
-        try:
-            process_alerts(raw_df)
-        except Exception as e:
-            logging.error(f"Alert processing failed: {e}")
+    if raw_df.empty:
+        logging.error("Raw data is empty. Ensure ingestion ran successfully.")
+        return
 
-        clean_df = transform_data(raw_df)
-        load_data(clean_df, engine)
+    try:
+        process_alerts(raw_df)
+    except Exception as e:
+        logging.error(f"Alert processing failed: {e}")
+
+    clean_df = transform_data(raw_df)
+    load_data(clean_df, engine)
     
     logging.info("ETL pipeline completed successfully.")
 

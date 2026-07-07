@@ -1,0 +1,9 @@
+fastapi
+uvicorn
+sqlalchemy
+psycopg2-binary
+redis
+kafka-python
+requests
+pandas
+pyTelegramBotAPI==4.14.0

@@ -9,12 +9,13 @@ from PIL import Image
 from typing import List, Dict, Any, Tuple
 
 sys.path.append(os.getcwd())
+
 try:
     from backend.predictor import predict_next_price
 except ImportError:
-    pass 
+    def predict_next_price(*args, **kwargs): return None
 
-# --- KONFIGURASI ---
+# --- CONFIG ---
 BACKEND_URL = os.getenv("BACKEND_URL", "http://backend:8000")
 SUMMARY_API = f"{BACKEND_URL}/api/summary"
 ICON_PATH = "frontend/assets/WoWoSaw1t.png"
@@ -22,7 +23,7 @@ ICON_PATH = "frontend/assets/WoWoSaw1t.png"
 try:
     icon_image = Image.open(ICON_PATH)
 except Exception:
-    icon_image = "📊"
+    icon_image = None
 
 st.set_page_config(
     page_title="Sawiet Maniac",
@@ -82,7 +83,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- FUNGSI KALKULASI TEKNIKAL ---
+# --- CALCULATION ---
 def calculate_rsi(series: pd.Series, period: int = 14) -> pd.Series:
     delta = series.diff()
     gain = (delta.where(delta > 0, 0)).rolling(window=period).mean()
@@ -98,7 +99,7 @@ def calculate_macd(series: pd.Series, fast: int = 12, slow: int = 26, signal: in
     signal_line = macd_line.ewm(span=signal, adjust=False).mean()
     return macd_line, signal_line
 
-# --- PENGOLAHAN DATA ---
+# --- DATA ---
 def fetch_data(endpoint: str) -> List[Dict[str, Any]]:
     try:
         response = requests.get(endpoint, timeout=3)
@@ -118,9 +119,8 @@ def process_data(df: pd.DataFrame) -> pd.DataFrame:
     
     return df
 
-# --- VISUALISASI ---
+# --- PLOTTING ---
 def plot_main_chart(df: pd.DataFrame, coin: str) -> go.Figure:
-    """Grafik Utama: Harga, MA, dan Prediksi AI."""
     fig = go.Figure()
     
     fig.add_trace(go.Scatter(
@@ -172,18 +172,18 @@ def plot_main_chart(df: pd.DataFrame, coin: str) -> go.Figure:
     return fig
 
 def plot_mini_charts(df: pd.DataFrame) -> Tuple[go.Figure, go.Figure, go.Figure]:
-    
-   
     fig1 = go.Figure(go.Bar(
         x=df['timestamp'], y=df['pct_change'],
         marker_color=['#00C853' if v >= 0 else '#D50000' for v in df['pct_change']]
     ))
     fig1.update_layout(title="Volatility %", template="plotly_white", height=200, margin=dict(l=0, r=0, t=30, b=0), yaxis=dict(showgrid=True, gridcolor='#f3f4f6'))
+    
     fig2 = go.Figure()
     fig2.add_trace(go.Scatter(x=df['timestamp'], y=df['RSI'], mode='lines', line=dict(color='#7C4DFF', width=2)))
     fig2.add_shape(type="line", x0=df['timestamp'].min(), x1=df['timestamp'].max(), y0=70, y1=70, line=dict(color="red", width=1, dash="dot"))
     fig2.add_shape(type="line", x0=df['timestamp'].min(), x1=df['timestamp'].max(), y0=30, y1=30, line=dict(color="green", width=1, dash="dot"))
     fig2.update_layout(title="RSI (14)", template="plotly_white", height=200, margin=dict(l=0, r=0, t=30, b=0), yaxis=dict(range=[0, 100], showgrid=True, gridcolor='#f3f4f6'))
+    
     fig3 = go.Figure()
     fig3.add_trace(go.Scatter(x=df['timestamp'], y=df['MACD'], mode='lines', line=dict(color='#2962FF', width=1.5)))
     fig3.add_trace(go.Scatter(x=df['timestamp'], y=df['MACD_Signal'], mode='lines', line=dict(color='#FFAB00', width=1.5)))
@@ -191,7 +191,7 @@ def plot_mini_charts(df: pd.DataFrame) -> Tuple[go.Figure, go.Figure, go.Figure]
     
     return fig1, fig2, fig3
 
-# --- DAPUR UTAMA ---
+# --- MAIN ---
 def main():
     with st.sidebar:
         st.markdown("<div class='sidebar-header'>INSTRUMENT SELECTOR</div>", unsafe_allow_html=True)
@@ -204,7 +204,7 @@ def main():
             options = {f"{r['coin_id'].upper()}": r['coin_id'] for _, r in df_summary.iterrows()}
             label = st.selectbox("Select Asset", list(options.keys()), label_visibility="collapsed")
             selected_coin = options[label]
-            st.caption(f"Status: Connected ●")
+            st.caption("Status: Connected")
         else:
             st.error("Connection Failed")
             st.caption("Check Backend")
@@ -220,7 +220,6 @@ def main():
         if auto_refresh: time.sleep(3); st.rerun()
         return
 
-    #Ambil Data
     history_url = f"{BACKEND_URL}/api/history/{selected_coin}"
     raw_hist = fetch_data(history_url)
     
@@ -229,7 +228,6 @@ def main():
         if auto_refresh: time.sleep(3); st.rerun()
         return
 
-    #Proses
     df = pd.DataFrame(raw_hist)
     df['timestamp'] = pd.to_datetime(df['timestamp'])
     df = process_data(df)
@@ -241,7 +239,6 @@ def main():
     
     st.markdown(f"### {selected_coin.upper()} OVERVIEW")
     
-    #Kartu Metrik
     c1, c2, c3, c4, c5 = st.columns(5)
     with c1: st.metric("Current Price", f"${curr:,.2f}")
     with c2: st.metric("Session Change", f"{diff:+.2f}", f"{(diff/start)*100:.2f}%")
@@ -251,11 +248,9 @@ def main():
 
     st.markdown("---")
     
-    #Grafik Utama
     fig_main = plot_main_chart(df, selected_coin)
     st.plotly_chart(fig_main, use_container_width=True)
     
-    #Grafik Mini
     c_left, c_mid, c_right = st.columns(3)
     f1, f2, f3 = plot_mini_charts(df)
     

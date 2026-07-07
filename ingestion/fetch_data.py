@@ -8,23 +8,21 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 DB_URL = os.getenv("DATABASE_URL")
 engine = create_engine(DB_URL)
 
-# Koin yg ingin dipantau/fetch
 COINS = "bitcoin,ethereum,solana,ripple,cardano"
 URL = f"https://api.coingecko.com/api/v3/simple/price?ids={COINS}&vs_currencies=usd&include_market_cap=true&include_24hr_vol=true"
 
 def fetch_crypto_prices():
-    logging.info("Calling CoinGecko API...")
+    logging.info("Calling API...")
     try:
         response = requests.get(URL, timeout=10)
         response.raise_for_status()
-        data = response.json()
-        return data
+        return response.json()
     except Exception as e:
         logging.error(f"Failed to fetch data: {e}")
         return None
 
 def run_ingestion():
-    logging.info("Starting Crypto Ingestion...")
+    logging.info("Starting ingestion...")
     
     data = fetch_crypto_prices()
     if not data:
@@ -36,7 +34,8 @@ def run_ingestion():
     """)
 
     try:
-        with engine.connect() as conn:
+        # engine.begin() handles transaction commit automatically
+        with engine.begin() as conn:
             for coin, stats in data.items():
                 record = {
                     "coin_id": coin,
@@ -46,8 +45,7 @@ def run_ingestion():
                 }
                 conn.execute(query, record)
             
-            conn.commit()
-            logging.info(f"Successfully ingested prices for {len(data)} coins.")
+        logging.info(f"Successfully ingested prices for {len(data)} coins.")
             
     except Exception as e:
         logging.error(f"Database insertion failed: {e}")

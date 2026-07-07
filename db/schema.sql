@@ -14,3 +14,4 @@ CREATE TABLE IF NOT EXISTS sales_summary (
     transaction_count INT,
     last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
